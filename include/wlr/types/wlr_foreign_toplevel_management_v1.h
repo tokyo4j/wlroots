@@ -149,5 +149,7 @@ void wlr_foreign_toplevel_handle_v1_set_parent(
 	struct wlr_foreign_toplevel_handle_v1 *toplevel,
 	struct wlr_foreign_toplevel_handle_v1 *parent);
 
+void wlr_foreign_toplevel_handle_v1_send_needs_attention(
+    struct wlr_foreign_toplevel_handle_v1 *toplevel);
 
 #endif

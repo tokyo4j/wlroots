@@ -8,7 +8,7 @@
 #include <wlr/util/log.h>
 #include "wlr-foreign-toplevel-management-unstable-v1-protocol.h"
 
-#define FOREIGN_TOPLEVEL_MANAGEMENT_V1_VERSION 3
+#define FOREIGN_TOPLEVEL_MANAGEMENT_V1_VERSION 4
 
 static const struct zwlr_foreign_toplevel_handle_v1_interface toplevel_handle_impl;
 
@@ -484,6 +484,18 @@ void wlr_foreign_toplevel_handle_v1_set_parent(
 	}
 	toplevel->parent = parent;
 	toplevel_update_idle_source(toplevel);
+}
+
+void wlr_foreign_toplevel_handle_v1_send_needs_attention(
+        	struct wlr_foreign_toplevel_handle_v1 *toplevel) {
+	struct wl_resource *resource;
+	wl_resource_for_each(resource, &toplevel->resources) {
+		if (wl_resource_get_version(resource) <
+				ZWLR_FOREIGN_TOPLEVEL_HANDLE_V1_NEEDS_ATTENTION_SINCE_VERSION) {
+			continue;
+		}
+		zwlr_foreign_toplevel_handle_v1_send_needs_attention(resource);
+	}
 }
 
 void wlr_foreign_toplevel_handle_v1_destroy(

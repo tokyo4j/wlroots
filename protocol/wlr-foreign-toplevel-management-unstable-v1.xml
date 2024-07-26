@@ -25,7 +25,7 @@
     THIS SOFTWARE.
   </copyright>
 
-  <interface name="zwlr_foreign_toplevel_manager_v1" version="3">
+  <interface name="zwlr_foreign_toplevel_manager_v1" version="4">
     <description summary="list and control opened apps">
       The purpose of this protocol is to enable the creation of taskbars
       and docks by providing them with a list of opened applications and
@@ -68,7 +68,7 @@
     </event>
   </interface>
 
-  <interface name="zwlr_foreign_toplevel_handle_v1" version="3">
+  <interface name="zwlr_foreign_toplevel_handle_v1" version="4">
     <description summary="an opened toplevel">
       A zwlr_foreign_toplevel_handle_v1 object represents an opened toplevel
       window. Each app may have multiple opened toplevels.
@@ -265,6 +265,15 @@
         No event is emitted when the parent handle is destroyed by the client.
       </description>
       <arg name="parent" type="object" interface="zwlr_foreign_toplevel_handle_v1" allow-null="true"/>
+    </event>
+
+    <!-- Version 4 additions -->
+
+    <event name="needs_attention" since="4">
+      <description summary="the toplevel needs attention">
+        Notification that the toplevel needs attention. An example is when
+        the compositor received "activate" request in xdg_activation protocol.
+      </description>
     </event>
   </interface>
 </protocol>
