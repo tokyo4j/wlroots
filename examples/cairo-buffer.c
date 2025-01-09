@@ -95,6 +95,8 @@ static void output_handle_frame(struct wl_listener *listener, void *data) {
 	wlr_scene_output_commit(output->scene_output, NULL);
 }
 
+static struct output *last_output;
+
 static void server_handle_new_output(struct wl_listener *listener, void *data) {
 	struct server *server = wl_container_of(listener, server, new_output);
 	struct wlr_output *wlr_output = data;
@@ -102,6 +104,7 @@ static void server_handle_new_output(struct wl_listener *listener, void *data) {
 	wlr_output_init_render(wlr_output, server->allocator, server->renderer);
 
 	struct output *output = calloc(1, sizeof(*output));
+	last_output = output;
 	output->wlr = wlr_output;
 	output->server = server;
 	output->frame.notify = output_handle_frame;
@@ -120,6 +123,37 @@ static void server_handle_new_output(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 }
 
+static void
+set_output_scale(struct output *output, float scale)
+{
+	struct wlr_output_state state;
+	wlr_output_state_init(&state);
+	wlr_output_state_set_scale(&state, 2.0);
+	wlr_output_commit_state(output->wlr, &state);
+	wlr_output_state_finish(&state);
+}
+
+static struct wl_listener outputs_update_listener;
+static void
+handle_outputs_update(struct wl_listener *listener, void *data)
+{
+	wlr_log(WLR_ERROR, "outputs_update");
+}
+
+static struct wl_listener output_enter_listener;
+static void
+handle_output_enter(struct wl_listener *listener, void *data)
+{
+	wlr_log(WLR_ERROR, "output_enter");
+}
+
+static struct wl_listener output_leave_listener;
+static void
+handle_output_leave(struct wl_listener *listener, void *data)
+{
+	wlr_log(WLR_ERROR, "output_leave");
+}
+
 int main(void) {
 	wlr_log_init(WLR_DEBUG, NULL);
 
@@ -127,6 +161,7 @@ int main(void) {
 	server.display = wl_display_create();
 	server.backend = wlr_backend_autocreate(wl_display_get_event_loop(server.display), NULL);
 	server.scene = wlr_scene_create();
+	wlr_scene_node_set_enabled(&server.scene->tree.node, false);
 
 	server.renderer = wlr_renderer_autocreate(server.backend);
 	wlr_renderer_init_wl_display(server.renderer, server.display);
@@ -143,49 +178,31 @@ int main(void) {
 	}
 
 	struct cairo_buffer *buffer = create_cairo_buffer(256, 256);
-	if (!buffer) {
-		wl_display_destroy(server.display);
-		return EXIT_FAILURE;
-	}
-
-	/* Begin drawing
-	 * From cairo samples at https://www.cairographics.org/samples/ */
 	cairo_t *cr = cairo_create(buffer->surface);
-	cairo_set_source_rgb(cr, 1, 1, 1);
+	cairo_set_source_rgb(cr, 1, 0, 0);
 	cairo_paint(cr);
-	cairo_set_source_rgb(cr, 0, 0, 0);
-
-	double x = 25.6, y = 128.0;
-	double x1 = 102.4, y1 = 230.4,
-			x2 = 153.6, y2 = 25.6,
-			x3 = 230.4, y3 = 128.0;
-
-	cairo_move_to(cr, x, y);
-	cairo_curve_to(cr, x1, y1, x2, y2, x3, y3);
-
-	cairo_set_line_width(cr, 10.0);
-	cairo_stroke(cr);
-
-	cairo_set_source_rgba(cr, 1, 0.2, 0.2, 0.6);
-	cairo_set_line_width(cr, 6.0);
-	cairo_move_to(cr, x, y);
-	cairo_line_to(cr, x1, y1);
-	cairo_move_to(cr, x2, y2);
-	cairo_line_to(cr, x3, y3);
-	cairo_stroke(cr);
-
 	cairo_destroy(cr);
-	/* End drawing */
 
 	struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_create(
 			&server.scene->tree, &buffer->base);
-	if (!scene_buffer) {
-		wl_display_destroy(server.display);
-		return EXIT_FAILURE;
-	}
-
 	wlr_scene_node_set_position(&scene_buffer->node, 50, 50);
 	wlr_buffer_drop(&buffer->base);
+
+	outputs_update_listener.notify = handle_outputs_update;
+	wl_signal_add(&scene_buffer->events.outputs_update, &outputs_update_listener);
+	output_enter_listener.notify = handle_output_enter;
+	wl_signal_add(&scene_buffer->events.output_enter, &output_enter_listener);
+	output_leave_listener.notify = handle_output_leave;
+	wl_signal_add(&scene_buffer->events.output_leave, &output_leave_listener);
+
+	wlr_log(WLR_ERROR, "-- showing the buffer --");
+	wlr_scene_node_set_enabled(&server.scene->tree.node, true);
+	wlr_log(WLR_ERROR, "-- hiding the buffer --");
+	wlr_scene_node_set_enabled(&scene_buffer->node, false);
+	wlr_log(WLR_ERROR, "-- updating output scale --");
+	set_output_scale(last_output, 2);
+	wlr_log(WLR_ERROR, "-- showing the buffer again --");
+	wlr_scene_node_set_enabled(&scene_buffer->node, true);
 
 	wl_display_run(server.display);
 
