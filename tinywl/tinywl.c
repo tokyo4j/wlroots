@@ -60,6 +60,7 @@ struct tinywl_server {
 	struct wl_listener request_set_selection;
 	struct wl_list keyboards;
 	enum tinywl_cursor_mode cursor_mode;
+	struct tinywl_toplevel *active_toplevel;
 	struct tinywl_toplevel *grabbed_toplevel;
 	double grab_x, grab_y;
 	struct wlr_box grab_geobox;
@@ -95,8 +96,10 @@ struct tinywl_toplevel {
 };
 
 struct tinywl_popup {
+	struct tinywl_server *server;
 	struct wlr_xdg_popup *xdg_popup;
 	struct wl_listener commit;
+	struct wl_listener grab;
 	struct wl_listener destroy;
 };
 
@@ -117,23 +120,19 @@ static void focus_toplevel(struct tinywl_toplevel *toplevel) {
 	}
 	struct tinywl_server *server = toplevel->server;
 	struct wlr_seat *seat = server->seat;
-	struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
 	struct wlr_surface *surface = toplevel->xdg_toplevel->base->surface;
-	if (prev_surface == surface) {
+	if (server->active_toplevel == toplevel) {
 		/* Don't re-focus an already focused surface. */
 		return;
 	}
-	if (prev_surface) {
+	if (server->active_toplevel) {
 		/*
 		 * Deactivate the previously focused surface. This lets the client know
 		 * it no longer has focus and the client will repaint accordingly, e.g.
 		 * stop displaying a caret.
 		 */
-		struct wlr_xdg_toplevel *prev_toplevel =
-			wlr_xdg_toplevel_try_from_wlr_surface(prev_surface);
-		if (prev_toplevel != NULL) {
-			wlr_xdg_toplevel_set_activated(prev_toplevel, false);
-		}
+		wlr_xdg_toplevel_set_activated(
+			server->active_toplevel->xdg_toplevel, false);
 	}
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
 	/* Move the toplevel to the front */
@@ -142,6 +141,7 @@ static void focus_toplevel(struct tinywl_toplevel *toplevel) {
 	wl_list_insert(&server->toplevels, &toplevel->link);
 	/* Activate the new surface */
 	wlr_xdg_toplevel_set_activated(toplevel->xdg_toplevel, true);
+	server->active_toplevel = toplevel;
 	/*
 	 * Tell the seat to have the keyboard enter this surface. wlroots will keep
 	 * track of this and automatically send key events to the appropriate
@@ -707,6 +707,11 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
 	/* Called when the xdg_toplevel is destroyed. */
 	struct tinywl_toplevel *toplevel = wl_container_of(listener, toplevel, destroy);
+	struct tinywl_server *server = toplevel->server;
+
+	if (server->active_toplevel == toplevel) {
+		server->active_toplevel = NULL;
+	}
 
 	wl_list_remove(&toplevel->map.link);
 	wl_list_remove(&toplevel->unmap.link);
@@ -850,11 +855,41 @@ static void xdg_popup_commit(struct wl_listener *listener, void *data) {
 	}
 }
 
+static void xdg_popup_grab(struct wl_listener *listener, void *data) {
+	/* Called when a popup is grabbed. */
+	struct tinywl_popup *popup = wl_container_of(listener, popup, grab);
+	struct wlr_seat *seat = popup->server->seat;
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+	if (keyboard) {
+		wlr_seat_keyboard_notify_enter(seat, popup->xdg_popup->base->surface,
+			keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+	}
+
+	/* A more sophisticated compositor can validate wlr_xdg_popup_grab_event.serial
+	 * and dismiss the grab if the serial is invalid by calling XXXXXXXX().
+	 * It can also defer focusing on the popup until its surface is mapped.
+	 */
+	wlr_seat_start_xdg_popup_grab(seat, popup->xdg_popup);
+}
+
 static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
 	/* Called when the xdg_popup is destroyed. */
 	struct tinywl_popup *popup = wl_container_of(listener, popup, destroy);
+	struct wlr_seat *seat = popup->server->seat;
+
+	/* If the popup is focused, move focus to its parent */
+	if (seat->keyboard_state.focused_surface == popup->xdg_popup->base->surface) {
+		wlr_seat_keyboard_notify_clear_focus(seat);
+		struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+		if (keyboard) {
+			wlr_seat_keyboard_notify_enter(seat, popup->xdg_popup->parent,
+				keyboard->keycodes, keyboard->num_keycodes,
+				&keyboard->modifiers);
+		}
+	}
 
 	wl_list_remove(&popup->commit.link);
+	wl_list_remove(&popup->grab.link);
 	wl_list_remove(&popup->destroy.link);
 
 	free(popup);
@@ -862,10 +897,12 @@ static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
 
 static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
 	/* This event is raised when a client creates a new popup. */
+	struct tinywl_server *server = wl_container_of(listener, server, new_xdg_popup);
 	struct wlr_xdg_popup *xdg_popup = data;
 
 	struct tinywl_popup *popup = calloc(1, sizeof(*popup));
 	popup->xdg_popup = xdg_popup;
+	popup->server = server;
 
 	/* We must add xdg popups to the scene graph so they get rendered. The
 	 * wlroots scene graph provides a helper for this, but to use it we must
@@ -879,6 +916,9 @@ static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
 
 	popup->commit.notify = xdg_popup_commit;
 	wl_signal_add(&xdg_popup->base->surface->events.commit, &popup->commit);
+
+	popup->grab.notify = xdg_popup_grab;
+	wl_signal_add(&xdg_popup->events.grab, &popup->grab);
 
 	popup->destroy.notify = xdg_popup_destroy;
 	wl_signal_add(&xdg_popup->events.destroy, &popup->destroy);

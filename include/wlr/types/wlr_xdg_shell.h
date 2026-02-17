@@ -108,6 +108,7 @@ struct wlr_xdg_popup {
 		struct wl_signal destroy;
 
 		struct wl_signal reposition;
+		struct wl_signal grab;
 	} events;
 
 	struct wl_list grab_link; // wlr_xdg_popup_grab.popups
@@ -342,6 +343,12 @@ struct wlr_xdg_toplevel_show_window_menu_event {
 	int32_t x, y;
 };
 
+struct wlr_xdg_popup_grab_event {
+	struct wlr_xdg_popup *popup;
+	struct wlr_seat_client *seat;
+	uint32_t serial;
+};
+
 /**
  * Create the xdg_wm_base global with the specified version.
  */
@@ -521,6 +528,11 @@ void wlr_xdg_popup_get_toplevel_coords(struct wlr_xdg_popup *popup,
  */
 void wlr_xdg_popup_unconstrain_from_box(struct wlr_xdg_popup *popup,
 		const struct wlr_box *toplevel_space_box);
+
+void wlr_seat_start_xdg_popup_grab(struct wlr_seat *seat,
+		struct wlr_xdg_popup *popup);
+
+void wlr_xdg_popup_send_popup_done(struct wlr_xdg_popup *popup);
 
 /**
  * Find a surface within this xdg-surface tree at the given surface-local

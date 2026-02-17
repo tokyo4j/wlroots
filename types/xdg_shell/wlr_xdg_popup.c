@@ -291,9 +291,6 @@ static void xdg_popup_handle_grab(struct wl_client *client,
 		return;
 	}
 
-	struct wlr_xdg_popup_grab *popup_grab = get_xdg_shell_popup_grab_from_seat(
-		popup->base->client->shell, seat_client->seat);
-
 	if (!wl_list_empty(&popup->base->popups)) {
 		wl_resource_post_error(popup->base->client->resource,
 			XDG_WM_BASE_ERROR_NOT_THE_TOPMOST_POPUP,
@@ -301,17 +298,31 @@ static void xdg_popup_handle_grab(struct wl_client *client,
 		return;
 	}
 
+	struct wlr_xdg_popup_grab_event event = {
+		.popup = popup,
+		.seat = seat_client,
+		.serial = serial,
+	};
+	wl_signal_emit_mutable(&popup->events.grab, &event);
+}
+
+void wlr_seat_start_xdg_popup_grab(struct wlr_seat *seat, struct wlr_xdg_popup *popup) {
+	struct wlr_xdg_popup_grab *popup_grab =
+		get_xdg_shell_popup_grab_from_seat(popup->base->client->shell, seat);
+	if (popup_grab == NULL) {
+		return;
+	}
+
 	popup_grab->client = popup->base->client->client;
-	popup->seat = seat_client->seat;
+	popup->seat = seat;
 
 	wl_list_insert(&popup_grab->popups, &popup->grab_link);
 
-	wlr_seat_pointer_start_grab(seat_client->seat,
-		&popup_grab->pointer_grab);
-	wlr_seat_keyboard_start_grab(seat_client->seat,
-		&popup_grab->keyboard_grab);
-	wlr_seat_touch_start_grab(seat_client->seat,
-		&popup_grab->touch_grab);
+	wlr_seat_keyboard_start_grab(seat, &popup_grab->keyboard_grab);
+}
+
+void wlr_xdg_popup_send_popup_done(struct wlr_xdg_popup *popup) {
+	xdg_popup_send_popup_done(popup->resource);
 }
 
 static void xdg_popup_handle_reposition(
@@ -416,6 +427,7 @@ void create_xdg_popup(struct wlr_xdg_surface *surface, struct wlr_xdg_surface *p
 
 	wl_signal_init(&surface->popup->events.destroy);
 	wl_signal_init(&surface->popup->events.reposition);
+	wl_signal_init(&surface->popup->events.grab);
 
 	if (parent) {
 		surface->popup->parent = parent->surface;
@@ -475,6 +487,7 @@ void destroy_xdg_popup(struct wlr_xdg_popup *popup) {
 
 	assert(wl_list_empty(&popup->events.destroy.listener_list));
 	assert(wl_list_empty(&popup->events.reposition.listener_list));
+	assert(wl_list_empty(&popup->events.grab.listener_list));
 
 	wlr_surface_synced_finish(&popup->synced);
 	popup->base->popup = NULL;
