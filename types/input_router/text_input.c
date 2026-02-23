@@ -198,7 +198,7 @@ struct wlr_text_input_v3_input_router_layer *wlr_text_input_v3_input_router_laye
 	layer->manager_destroy.notify = handle_manager_destroy;
 	wl_signal_add(&manager->events.destroy, &layer->manager_destroy);
 	layer->manager_text_input.notify = handle_manager_text_input;
-	wl_signal_add(&manager->events.text_input, &layer->manager_text_input);
+	wl_signal_add(&manager->events.new_text_input, &layer->manager_text_input);
 
 	layer->router = router;
 	layer->router_destroy.notify = handle_router_destroy;
