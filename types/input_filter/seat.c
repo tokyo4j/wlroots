@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_compositor.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/log.h>
 
@@ -10,29 +10,29 @@
 
 // For touch points, seat_client is NULL if the client is not aware of the point
 
-static void clear_touch_point_seat_client(struct wlr_seat_input_router_layer_touch_point *point) {
+static void clear_touch_point_seat_client(struct wlr_seat_input_filter_layer_touch_point *point) {
 	point->seat_client = NULL;
 	wl_list_remove(&point->seat_client_destroy.link);
 	wl_list_init(&point->seat_client_destroy.link);
 }
 
 static void touch_point_handle_seat_client_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_seat_input_router_layer_touch_point *point =
+	struct wlr_seat_input_filter_layer_touch_point *point =
 		wl_container_of(listener, point, seat_client_destroy);
 	clear_touch_point_seat_client(point);
 }
 
-static void init_touch_point(struct wlr_seat_input_router_layer_touch_point *point) {
-	*point = (struct wlr_seat_input_router_layer_touch_point){0};
+static void init_touch_point(struct wlr_seat_input_filter_layer_touch_point *point) {
+	*point = (struct wlr_seat_input_filter_layer_touch_point){0};
 	point->seat_client_destroy.notify = touch_point_handle_seat_client_destroy;
 	wl_list_init(&point->seat_client_destroy.link);
 }
 
-static void finish_touch_point(struct wlr_seat_input_router_layer_touch_point *point) {
+static void finish_touch_point(struct wlr_seat_input_filter_layer_touch_point *point) {
 	wl_list_remove(&point->seat_client_destroy.link);
 }
 
-static uint32_t keyboard_send_enter(struct wlr_seat_input_router_layer *layer,
+static uint32_t keyboard_send_enter(struct wlr_seat_input_filter_layer *layer,
 		struct wlr_surface *surface) {
 	uint32_t *keycodes = NULL;
 	size_t num_keycodes = 0;
@@ -50,15 +50,15 @@ static uint32_t keyboard_send_enter(struct wlr_seat_input_router_layer *layer,
 	return 0;
 }
 
-static uint32_t keyboard_focus(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_focus_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(keyboard, layer, keyboard);
-	return keyboard_send_enter(layer, wlr_input_router_focus_get_surface(event->focus));
+static uint32_t keyboard_focus(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_focus_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(keyboard, layer, keyboard);
+	return keyboard_send_enter(layer, wlr_input_filter_focus_get_surface(event->focus));
 }
 
-static void keyboard_device(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_device_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(keyboard, layer, keyboard);
+static void keyboard_device(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_device_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(keyboard, layer, keyboard);
 	struct wlr_keyboard *device = event->device;
 
 	if (wlr_seat_get_keyboard(layer->seat) == device) {
@@ -74,9 +74,9 @@ static void keyboard_device(struct wlr_input_router_keyboard *keyboard,
 	keyboard_send_enter(layer, surface);
 }
 
-static uint32_t keyboard_key(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_key_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(keyboard, layer, keyboard);
+static uint32_t keyboard_key(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_key_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(keyboard, layer, keyboard);
 	if (event->intercepted) {
 		// Update the client state without sending a wl_keyboard.key event
 		// XXX: this is suboptimal, wl_keyboard.keys would be better
@@ -92,15 +92,15 @@ static uint32_t keyboard_key(struct wlr_input_router_keyboard *keyboard,
 	}
 }
 
-static void keyboard_modifiers(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_modifiers_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(keyboard, layer, keyboard);
+static void keyboard_modifiers(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_modifiers_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(keyboard, layer, keyboard);
 	wlr_seat_keyboard_send_modifiers(layer->seat, &keyboard->device->modifiers);
 }
 
-static const struct wlr_input_router_keyboard_interface keyboard_impl = {
+static const struct wlr_input_filter_keyboard_impl keyboard_impl = {
 	.base = {
-		.name = "wlr_seat_input_router_layer-keyboard",
+		.name = "wlr_seat_input_filter_layer-keyboard",
 	},
 	.focus = keyboard_focus,
 	.device = keyboard_device,
@@ -108,16 +108,16 @@ static const struct wlr_input_router_keyboard_interface keyboard_impl = {
 	.modifiers = keyboard_modifiers,
 };
 
-static uint32_t pointer_position(struct wlr_input_router_pointer *pointer,
-		const struct wlr_input_router_pointer_position_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(pointer, layer, pointer);
+static uint32_t pointer_position(struct wlr_input_filter_pointer *pointer,
+		const struct wlr_input_filter_pointer_position_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(pointer, layer, pointer);
 
-	struct wlr_surface *surface = wlr_input_router_focus_get_surface(event->focus);
+	struct wlr_surface *surface = wlr_input_filter_focus_get_surface(event->focus);
 	double sx = 0, sy = 0;
 
 	if (surface != NULL) {
 		double surface_x, surface_y;
-		if (!wlr_input_router_get_surface_position(layer->router, surface,
+		if (!wlr_input_filter_get_surface_position(layer->router, surface,
 				&surface_x, &surface_y)) {
 			return 0;
 		}
@@ -133,29 +133,29 @@ static uint32_t pointer_position(struct wlr_input_router_pointer *pointer,
 	return 0;
 }
 
-static uint32_t pointer_button(struct wlr_input_router_pointer *pointer,
-		const struct wlr_input_router_pointer_button_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(pointer, layer, pointer);
+static uint32_t pointer_button(struct wlr_input_filter_pointer *pointer,
+		const struct wlr_input_filter_pointer_button_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(pointer, layer, pointer);
 	return wlr_seat_pointer_send_button(layer->seat,
 		event->time_msec, event->button, event->state);
 }
 
-static void pointer_axis(struct wlr_input_router_pointer *pointer,
-		const struct wlr_input_router_pointer_axis_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(pointer, layer, pointer);
+static void pointer_axis(struct wlr_input_filter_pointer *pointer,
+		const struct wlr_input_filter_pointer_axis_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(pointer, layer, pointer);
 	wlr_seat_pointer_send_axis(layer->seat, event->time_msec, event->orientation,
 		event->delta, event->delta_discrete, event->source, event->relative_direction);
 }
 
-static void pointer_frame(struct wlr_input_router_pointer *pointer,
-		const struct wlr_input_router_pointer_frame_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(pointer, layer, pointer);
+static void pointer_frame(struct wlr_input_filter_pointer *pointer,
+		const struct wlr_input_filter_pointer_frame_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(pointer, layer, pointer);
 	wlr_seat_pointer_send_frame(layer->seat);
 }
 
-static const struct wlr_input_router_pointer_interface pointer_impl = {
+static const struct wlr_input_filter_pointer_impl pointer_impl = {
 	.base = {
-		.name = "wlr_seat_input_router_layer-pointer",
+		.name = "wlr_seat_input_filter_layer-pointer",
 	},
 	.position = pointer_position,
 	.button = pointer_button,
@@ -163,18 +163,18 @@ static const struct wlr_input_router_pointer_interface pointer_impl = {
 	.frame = pointer_frame,
 };
 
-static void touch_position(struct wlr_input_router_touch *touch,
-		const struct wlr_input_router_touch_position_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(touch, layer, touch);
+static void touch_position(struct wlr_input_filter_touch *touch,
+		const struct wlr_input_filter_touch_position_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(touch, layer, touch);
 
-	struct wlr_seat_input_router_layer_touch_point *point = &layer->touch_points[event->index];
-	struct wlr_surface *surface = wlr_input_router_focus_get_surface(event->focus);
+	struct wlr_seat_input_filter_layer_touch_point *point = &layer->touch_points[event->index];
+	struct wlr_surface *surface = wlr_input_filter_focus_get_surface(event->focus);
 	if (surface == NULL) {
 		return;
 	}
 
 	double surface_x, surface_y;
-	if (!wlr_input_router_get_surface_position(layer->router, surface, &surface_x, &surface_y)) {
+	if (!wlr_input_filter_get_surface_position(layer->router, surface, &surface_x, &surface_y)) {
 		return;
 	}
 	double sx = event->x - surface_x, sy = event->y - surface_y;
@@ -194,20 +194,20 @@ static void touch_position(struct wlr_input_router_touch *touch,
 	point->seat_client->needs_touch_frame = true;
 }
 
-static uint32_t touch_down(struct wlr_input_router_touch *touch,
-		const struct wlr_input_router_touch_down_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(touch, layer, touch);
+static uint32_t touch_down(struct wlr_input_filter_touch *touch,
+		const struct wlr_input_filter_touch_down_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(touch, layer, touch);
 
-	struct wlr_seat_input_router_layer_touch_point *point = &layer->touch_points[event->index];
+	struct wlr_seat_input_filter_layer_touch_point *point = &layer->touch_points[event->index];
 	init_touch_point(point);
 
-	struct wlr_surface *surface = wlr_input_router_focus_get_surface(event->focus);
+	struct wlr_surface *surface = wlr_input_filter_focus_get_surface(event->focus);
 	if (surface == NULL) {
 		return 0;
 	}
 
 	double surface_x, surface_y;
-	if (!wlr_input_router_get_surface_position(layer->router, surface, &surface_x, &surface_y)) {
+	if (!wlr_input_filter_get_surface_position(layer->router, surface, &surface_x, &surface_y)) {
 		return 0;
 	}
 	double sx = event->x - surface_x, sy = event->y - surface_y;
@@ -237,11 +237,11 @@ static uint32_t touch_down(struct wlr_input_router_touch *touch,
 	return serial;
 }
 
-static uint32_t touch_up(struct wlr_input_router_touch *touch,
-		const struct wlr_input_router_touch_up_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(touch, layer, touch);
+static uint32_t touch_up(struct wlr_input_filter_touch *touch,
+		const struct wlr_input_filter_touch_up_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(touch, layer, touch);
 
-	struct wlr_seat_input_router_layer_touch_point *point = &layer->touch_points[event->index];
+	struct wlr_seat_input_filter_layer_touch_point *point = &layer->touch_points[event->index];
 	struct wlr_seat_client *seat_client = point->seat_client;
 	finish_touch_point(point);
 
@@ -260,11 +260,11 @@ static uint32_t touch_up(struct wlr_input_router_touch *touch,
 	return serial;
 }
 
-static void touch_cancel(struct wlr_input_router_touch *touch,
-		const struct wlr_input_router_touch_cancel_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(touch, layer, touch);
+static void touch_cancel(struct wlr_input_filter_touch *touch,
+		const struct wlr_input_filter_touch_cancel_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(touch, layer, touch);
 
-	struct wlr_seat_input_router_layer_touch_point *point = &layer->touch_points[event->index];
+	struct wlr_seat_input_filter_layer_touch_point *point = &layer->touch_points[event->index];
 	struct wlr_seat_client *seat_client = point->seat_client;
 	if (seat_client == NULL) {
 		return;
@@ -284,12 +284,12 @@ static void touch_cancel(struct wlr_input_router_touch *touch,
 	}
 }
 
-static void touch_frame(struct wlr_input_router_touch *touch,
-		const struct wlr_input_router_touch_frame_event *event) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(touch, layer, touch);
+static void touch_frame(struct wlr_input_filter_touch *touch,
+		const struct wlr_input_filter_touch_frame_event *event) {
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(touch, layer, touch);
 
 	for (size_t i = 0; i < touch->n_points; i++) {
-		struct wlr_seat_input_router_layer_touch_point *point = &layer->touch_points[i];
+		struct wlr_seat_input_filter_layer_touch_point *point = &layer->touch_points[i];
 		struct wlr_seat_client *seat_client = point->seat_client;
 		if (seat_client != NULL && seat_client->needs_touch_frame) {
 			struct wl_resource *resource;
@@ -301,9 +301,9 @@ static void touch_frame(struct wlr_input_router_touch *touch,
 	}
 }
 
-static const struct wlr_input_router_touch_interface touch_impl = {
+static const struct wlr_input_filter_touch_impl touch_impl = {
 	.base = {
-		.name = "wlr_seat_input_router_layer-touch",
+		.name = "wlr_seat_input_filter_layer-touch",
 	},
 	.position = touch_position,
 	.down = touch_down,
@@ -313,40 +313,40 @@ static const struct wlr_input_router_touch_interface touch_impl = {
 };
 
 static void handle_router_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(listener, layer, router_destroy);
-	wlr_seat_input_router_layer_destroy(layer);
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(listener, layer, router_destroy);
+	wlr_seat_input_filter_layer_destroy(layer);
 }
 
 static void handle_seat_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_seat_input_router_layer *layer = wl_container_of(listener, layer, seat_destroy);
-	wlr_seat_input_router_layer_destroy(layer);
+	struct wlr_seat_input_filter_layer *layer = wl_container_of(listener, layer, seat_destroy);
+	wlr_seat_input_filter_layer_destroy(layer);
 }
 
-bool wlr_seat_input_router_layer_register(int32_t priority) {
-	if (!wlr_input_router_keyboard_register_interface(&keyboard_impl, priority)) {
+bool wlr_seat_input_filter_layer_register(int32_t priority) {
+	if (!wlr_input_filter_keyboard_register_interface(&keyboard_impl, priority)) {
 		return false;
 	}
-	if (!wlr_input_router_pointer_register_interface(&pointer_impl, priority)) {
+	if (!wlr_input_filter_pointer_register_interface(&pointer_impl, priority)) {
 		return false;
 	}
-	if (!wlr_input_router_touch_register_interface(&touch_impl, priority)) {
+	if (!wlr_input_filter_touch_register_interface(&touch_impl, priority)) {
 		return false;
 	}
 	return true;
 }
 
-struct wlr_seat_input_router_layer *wlr_seat_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_seat *seat) {
-	struct wlr_seat_input_router_layer *layer = calloc(1, sizeof(*layer));
+struct wlr_seat_input_filter_layer *wlr_seat_input_filter_layer_create(
+		struct wlr_input_filter *filter, struct wlr_seat *seat) {
+	struct wlr_seat_input_filter_layer *layer = calloc(1, sizeof(*layer));
 	if (layer == NULL) {
 		wlr_log(WLR_ERROR, "Allocation failed");
 		return NULL;
 	}
 
-	wlr_input_router_keyboard_init(&layer->keyboard, router, &keyboard_impl);
-	wlr_input_router_pointer_init(&layer->pointer, router, &pointer_impl);
+	wlr_input_filter_keyboard_init(&layer->keyboard, router, &keyboard_impl);
+	wlr_input_filter_pointer_init(&layer->pointer, router, &pointer_impl);
 
-	wlr_input_router_touch_init(&layer->touch, router, &touch_impl);
+	wlr_input_filter_touch_init(&layer->touch, router, &touch_impl);
 	for (size_t i = 0; i < layer->touch.n_points; i++) {
 		init_touch_point(&layer->touch_points[i]);
 	}
@@ -364,7 +364,7 @@ struct wlr_seat_input_router_layer *wlr_seat_input_router_layer_create(
 	return layer;
 }
 
-void wlr_seat_input_router_layer_destroy(struct wlr_seat_input_router_layer *layer) {
+void wlr_seat_input_filter_layer_destroy(struct wlr_seat_input_filter_layer *layer) {
 	if (layer == NULL) {
 		return;
 	}
@@ -373,13 +373,13 @@ void wlr_seat_input_router_layer_destroy(struct wlr_seat_input_router_layer *lay
 
 	assert(wl_list_empty(&layer->events.destroy.listener_list));
 
-	wlr_input_router_keyboard_finish(&layer->keyboard);
-	wlr_input_router_pointer_finish(&layer->pointer);
+	wlr_input_filter_keyboard_finish(&layer->keyboard);
+	wlr_input_filter_pointer_finish(&layer->pointer);
 
 	for (size_t i = 0; i < layer->touch.n_points; i++) {
 		finish_touch_point(&layer->touch_points[i]);
 	}
-	wlr_input_router_touch_finish(&layer->touch);
+	wlr_input_filter_touch_finish(&layer->touch);
 
 	wl_list_remove(&layer->router_destroy.link);
 	wl_list_remove(&layer->seat_destroy.link);

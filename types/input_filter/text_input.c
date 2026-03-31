@@ -5,7 +5,7 @@
 #include "wlr/util/log.h"
 
 struct text_input {
-	struct wlr_text_input_v3_input_router_layer *layer;
+	struct wlr_text_input_v3_input_filter_layer *layer;
 	struct wlr_text_input_v3 *wlr_text_input;
 
 	struct wl_list link;
@@ -36,9 +36,9 @@ static void text_input_safe_enter(struct text_input *text_input, struct wlr_surf
 	}
 }
 
-static void update_active_text_input(struct wlr_text_input_v3_input_router_layer *layer) {
+static void update_active_text_input(struct wlr_text_input_v3_input_filter_layer *layer) {
 	struct wlr_text_input_v3 *active_text_input = NULL;
-	struct wlr_surface *surface = wlr_input_router_focus_get_surface(&layer->keyboard.focus);
+	struct wlr_surface *surface = wlr_input_filter_focus_get_surface(&layer->keyboard.focus);
 	if (surface != NULL) {
 		struct text_input *text_input;
 		wl_list_for_each(text_input, &layer->text_inputs, link) {
@@ -55,7 +55,7 @@ static void update_active_text_input(struct wlr_text_input_v3_input_router_layer
 	}
 	layer->active_text_input = active_text_input;
 
-	struct wlr_text_input_v3_input_router_layer_set_active_event event = {
+	struct wlr_text_input_v3_input_filter_layer_set_active_event event = {
 		.active_text_input = active_text_input,
 	};
 	wl_signal_emit_mutable(&layer->events.set_active_text_input, &event);
@@ -64,7 +64,7 @@ static void update_active_text_input(struct wlr_text_input_v3_input_router_layer
 static void destroy_text_input(struct text_input *text_input) {
 	wl_list_remove(&text_input->link);
 
-	struct wlr_text_input_v3_input_router_layer *layer = text_input->layer;
+	struct wlr_text_input_v3_input_filter_layer *layer = text_input->layer;
 	if (layer->active_text_input == text_input->wlr_text_input) {
 		update_active_text_input(layer);
 	}
@@ -82,7 +82,7 @@ static void text_input_handle_destroy(struct wl_listener *listener, void *data) 
 
 static void text_input_handle_enable(struct wl_listener *listener, void *data) {
 	struct text_input *text_input = wl_container_of(listener, text_input, enable);
-	struct wlr_text_input_v3_input_router_layer *layer = text_input->layer;
+	struct wlr_text_input_v3_input_filter_layer *layer = text_input->layer;
 	if (layer->active_text_input == NULL) {
 		update_active_text_input(layer);
 	}
@@ -90,13 +90,13 @@ static void text_input_handle_enable(struct wl_listener *listener, void *data) {
 
 static void text_input_handle_disable(struct wl_listener *listener, void *data) {
 	struct text_input *text_input = wl_container_of(listener, text_input, disable);
-	struct wlr_text_input_v3_input_router_layer *layer = text_input->layer;
+	struct wlr_text_input_v3_input_filter_layer *layer = text_input->layer;
 	if (layer->active_text_input == text_input->wlr_text_input) {
 		update_active_text_input(layer);
 	}
 }
 
-static void create_text_input(struct wlr_text_input_v3_input_router_layer *layer,
+static void create_text_input(struct wlr_text_input_v3_input_filter_layer *layer,
 		struct wlr_text_input_v3 *wlr_text_input) {
 	if (wlr_text_input->seat != layer->seat) {
 		return;
@@ -120,20 +120,20 @@ static void create_text_input(struct wlr_text_input_v3_input_router_layer *layer
 	text_input->disable.notify = text_input_handle_disable;
 	wl_signal_add(&wlr_text_input->events.disable, &text_input->disable);
 
-	struct wlr_surface *surface = wlr_input_router_focus_get_surface(&layer->keyboard.focus);
+	struct wlr_surface *surface = wlr_input_filter_focus_get_surface(&layer->keyboard.focus);
 	text_input_safe_enter(text_input, surface);
 	update_active_text_input(layer);
 }
 
-static uint32_t keyboard_focus(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_focus_event *event) {
-	struct wlr_text_input_v3_input_router_layer *layer =
+static uint32_t keyboard_focus(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_focus_event *event) {
+	struct wlr_text_input_v3_input_filter_layer *layer =
 		wl_container_of(keyboard, layer, keyboard);
 
 	// Relay the event first; "the text-input focus follows the keyboard focus".
-	uint32_t serial = wlr_input_router_keyboard_notify_focus(keyboard, event);
+	uint32_t serial = wlr_input_filter_keyboard_notify_focus(keyboard, event);
 
-	struct wlr_surface *surface = wlr_input_router_focus_get_surface(event->focus);
+	struct wlr_surface *surface = wlr_input_filter_focus_get_surface(event->focus);
 	struct text_input *text_input;
 	wl_list_for_each(text_input, &layer->text_inputs, link) {
 		text_input_safe_enter(text_input, surface);
@@ -143,55 +143,55 @@ static uint32_t keyboard_focus(struct wlr_input_router_keyboard *keyboard,
 	return serial;
 }
 
-static const struct wlr_input_router_keyboard_interface keyboard_impl = {
+static const struct wlr_input_filter_keyboard_impl keyboard_impl = {
 	.base = {
-		.name = "wlr_text_input_v3_input_router_layer-keyboard",
+		.name = "wlr_text_input_v3_input_filter_layer-keyboard",
 	},
 	.focus = keyboard_focus,
 };
 
 static void handle_manager_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_text_input_v3_input_router_layer *layer =
+	struct wlr_text_input_v3_input_filter_layer *layer =
 		wl_container_of(listener, layer, manager_destroy);
-	wlr_text_input_v3_input_router_layer_destroy(layer);
+	wlr_text_input_v3_input_filter_layer_destroy(layer);
 }
 
 static void handle_manager_text_input(struct wl_listener *listener, void *data) {
-	struct wlr_text_input_v3_input_router_layer *layer =
+	struct wlr_text_input_v3_input_filter_layer *layer =
 		wl_container_of(listener, layer, manager_text_input);
 	struct wlr_text_input_v3 *wlr_text_input = data;
 	create_text_input(layer, wlr_text_input);
 }
 
 static void handle_router_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_text_input_v3_input_router_layer *layer =
+	struct wlr_text_input_v3_input_filter_layer *layer =
 		wl_container_of(listener, layer, router_destroy);
-	wlr_text_input_v3_input_router_layer_destroy(layer);
+	wlr_text_input_v3_input_filter_layer_destroy(layer);
 }
 
 static void handle_seat_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_text_input_v3_input_router_layer *layer =
+	struct wlr_text_input_v3_input_filter_layer *layer =
 		wl_container_of(listener, layer, seat_destroy);
-	wlr_text_input_v3_input_router_layer_destroy(layer);
+	wlr_text_input_v3_input_filter_layer_destroy(layer);
 }
 
-bool wlr_text_input_v3_input_router_layer_register(int32_t priority) {
-	if (!wlr_input_router_keyboard_register_interface(&keyboard_impl, priority)) {
+bool wlr_text_input_v3_input_filter_layer_register(int32_t priority) {
+	if (!wlr_input_filter_keyboard_register_interface(&keyboard_impl, priority)) {
 		return false;
 	}
 	return true;
 }
 
-struct wlr_text_input_v3_input_router_layer *wlr_text_input_v3_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_text_input_manager_v3 *manager,
+struct wlr_text_input_v3_input_filter_layer *wlr_text_input_v3_input_filter_layer_create(
+		struct wlr_input_filter *filter, struct wlr_text_input_manager_v3 *manager,
 		struct wlr_seat *seat) {
-	struct wlr_text_input_v3_input_router_layer *layer = calloc(1, sizeof(*layer));
+	struct wlr_text_input_v3_input_filter_layer *layer = calloc(1, sizeof(*layer));
 	if (layer == NULL) {
 		wlr_log(WLR_ERROR, "Allocation failed");
 		return NULL;
 	}
 
-	wlr_input_router_keyboard_init(&layer->keyboard,
+	wlr_input_filter_keyboard_init(&layer->keyboard,
 		router, &keyboard_impl);
 
 	layer->manager = manager;
@@ -221,8 +221,8 @@ struct wlr_text_input_v3_input_router_layer *wlr_text_input_v3_input_router_laye
 	return layer;
 }
 
-void wlr_text_input_v3_input_router_layer_destroy(
-		struct wlr_text_input_v3_input_router_layer *layer) {
+void wlr_text_input_v3_input_filter_layer_destroy(
+		struct wlr_text_input_v3_input_filter_layer *layer) {
 	if (layer == NULL) {
 		return;
 	}
@@ -239,7 +239,7 @@ void wlr_text_input_v3_input_router_layer_destroy(
 		destroy_text_input(text_input);
 	}
 
-	wlr_input_router_keyboard_finish(&layer->keyboard);
+	wlr_input_filter_keyboard_finish(&layer->keyboard);
 
 	wl_list_remove(&layer->manager_destroy.link);
 	wl_list_remove(&layer->manager_text_input.link);

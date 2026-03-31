@@ -10,7 +10,7 @@
 #define WLR_TYPES_WLR_TEXT_INPUT_V3_H
 
 #include <wayland-server-core.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/box.h>
 
@@ -88,20 +88,20 @@ struct wlr_text_input_manager_v3 {
  * A zwp_text_input_v3 input router layer which synchronizes focuses of text
  * inputs to the keyboard focus and tracks the currently active text input.
  */
-struct wlr_text_input_v3_input_router_layer {
-	struct wlr_input_router *router;
+struct wlr_text_input_v3_input_filter_layer {
+	struct wlr_input_filter *filter;
 	struct wlr_text_input_manager_v3 *manager;
 	struct wlr_seat *seat;
 
 	struct {
 		struct wl_signal destroy;
 
-		// struct wlr_text_input_v3_input_router_layer_set_active_event
+		// struct wlr_text_input_v3_input_filter_layer_set_active_event
 		struct wl_signal set_active_text_input;
 	} events;
 
 	struct {
-		struct wlr_input_router_keyboard keyboard;
+		struct wlr_input_filter_keyboard keyboard;
 
 		struct wl_list text_inputs;
 		struct wlr_text_input_v3 *active_text_input;
@@ -114,7 +114,7 @@ struct wlr_text_input_v3_input_router_layer {
 	} WLR_PRIVATE;
 };
 
-struct wlr_text_input_v3_input_router_layer_set_active_event {
+struct wlr_text_input_v3_input_filter_layer_set_active_event {
 	struct wlr_text_input_v3 *active_text_input;
 };
 
@@ -135,12 +135,12 @@ void wlr_text_input_v3_send_delete_surrounding_text(
 	uint32_t after_length);
 void wlr_text_input_v3_send_done(struct wlr_text_input_v3 *text_input);
 
-bool wlr_text_input_v3_input_router_layer_register(int32_t priority);
+bool wlr_text_input_v3_input_filter_layer_register(int32_t priority);
 
-struct wlr_text_input_v3_input_router_layer *wlr_text_input_v3_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_text_input_manager_v3 *manager,
-		struct wlr_seat *seat);
-void wlr_text_input_v3_input_router_layer_destroy(
-		struct wlr_text_input_v3_input_router_layer *layer);
+struct wlr_text_input_v3_input_filter_layer *wlr_text_input_v3_input_filter_layer_create(
+	struct wlr_input_filter *filter, struct wlr_text_input_manager_v3 *manager,
+	struct wlr_seat *seat);
+void wlr_text_input_v3_input_filter_layer_destroy(
+	struct wlr_text_input_v3_input_filter_layer *layer);
 
 #endif

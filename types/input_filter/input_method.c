@@ -1,14 +1,14 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_input_method_v2.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_text_input_v3.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/util/log.h>
 
 struct text_input {
-	struct wlr_input_method_v2_input_router_layer *layer;
+	struct wlr_input_method_v2_input_filter_layer *layer;
 	struct wlr_text_input_v3 *wlr_text_input;
 
 	struct wl_list link;
@@ -19,7 +19,7 @@ struct text_input {
 	struct wl_listener commit;
 };
 
-static void update_device_grab(struct wlr_input_method_v2_input_router_layer *layer) {
+static void update_device_grab(struct wlr_input_method_v2_input_filter_layer *layer) {
 	layer->device_grabbed = false;
 	struct wlr_keyboard *device = layer->keyboard.device;
 	if (layer->grab == NULL || device == NULL) {
@@ -46,7 +46,7 @@ static void update_device_grab(struct wlr_input_method_v2_input_router_layer *la
 }
 
 // Returns true if needs wlr_input_method_v2_send_done() afterwards
-static bool update_input_method_active(struct wlr_input_method_v2_input_router_layer *layer) {
+static bool update_input_method_active(struct wlr_input_method_v2_input_filter_layer *layer) {
 	assert(layer->input_method != NULL);
 
 	bool active = layer->active_text_input != NULL;
@@ -63,7 +63,7 @@ static bool update_input_method_active(struct wlr_input_method_v2_input_router_l
 }
 
 // Returns true if needs wlr_input_method_v2_send_done() afterwards
-static bool active_text_input_state(struct wlr_input_method_v2_input_router_layer *layer,
+static bool active_text_input_state(struct wlr_input_method_v2_input_filter_layer *layer,
 		bool send_full) {
 	assert(layer->input_method != NULL);
 
@@ -109,7 +109,7 @@ static bool active_text_input_state(struct wlr_input_method_v2_input_router_laye
 	return sent;
 }
 
-static void set_grab(struct wlr_input_method_v2_input_router_layer *layer,
+static void set_grab(struct wlr_input_method_v2_input_filter_layer *layer,
 		struct wlr_input_method_keyboard_grab_v2 *grab) {
 	if (layer->grab == grab) {
 		return;
@@ -126,9 +126,9 @@ static void set_grab(struct wlr_input_method_v2_input_router_layer *layer,
 	update_device_grab(layer);
 }
 
-static void keyboard_device(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_device_event *event) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+static void keyboard_device(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_device_event *event) {
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(keyboard, layer, keyboard);
 	update_device_grab(layer);
 
@@ -136,12 +136,12 @@ static void keyboard_device(struct wlr_input_router_keyboard *keyboard,
 		return;
 	}
 
-	wlr_input_router_keyboard_notify_device(keyboard, event);
+	wlr_input_filter_keyboard_notify_device(keyboard, event);
 }
 
-static uint32_t keyboard_key(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_key_event *event) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+static uint32_t keyboard_key(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_key_event *event) {
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(keyboard, layer, keyboard);
 	if (layer->device_grabbed) {
 		if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
@@ -174,12 +174,12 @@ static uint32_t keyboard_key(struct wlr_input_router_keyboard *keyboard,
 		return 0;
 	}
 
-	return wlr_input_router_keyboard_notify_key(keyboard, event);
+	return wlr_input_filter_keyboard_notify_key(keyboard, event);
 }
 
-static void keyboard_modifiers(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_modifiers_event *event) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+static void keyboard_modifiers(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_modifiers_event *event) {
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(keyboard, layer, keyboard);
 	if (layer->device_grabbed) {
 		wlr_input_method_keyboard_grab_v2_send_modifiers(layer->grab,
@@ -187,12 +187,12 @@ static void keyboard_modifiers(struct wlr_input_router_keyboard *keyboard,
 		return;
 	}
 
-	wlr_input_router_keyboard_notify_modifiers(keyboard, event);
+	wlr_input_filter_keyboard_notify_modifiers(keyboard, event);
 }
 
-static const struct wlr_input_router_keyboard_interface keyboard_impl = {
+static const struct wlr_input_filter_keyboard_impl keyboard_impl = {
 	.base = {
-		.name = "wlr_input_method_v2_input_router_layer-keyboard",
+		.name = "wlr_input_method_v2_input_filter_layer-keyboard",
 	},
 	.device = keyboard_device,
 	.key = keyboard_key,
@@ -200,13 +200,13 @@ static const struct wlr_input_router_keyboard_interface keyboard_impl = {
 };
 
 static void handle_active_text_input_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, active_text_input_destroy);
-	wlr_input_method_v2_input_router_layer_set_active_text_input(layer, NULL);
+	wlr_input_method_v2_input_filter_layer_set_active_text_input(layer, NULL);
 }
 
 static void handle_active_text_input_commit(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, active_text_input_commit);
 	if (layer->input_method != NULL && active_text_input_state(layer, false)) {
 		wlr_input_method_v2_send_done(layer->input_method);
@@ -214,13 +214,13 @@ static void handle_active_text_input_commit(struct wl_listener *listener, void *
 }
 
 static void handle_input_method_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, input_method_destroy);
-	wlr_input_method_v2_input_router_layer_set_input_method(layer, NULL);
+	wlr_input_method_v2_input_filter_layer_set_input_method(layer, NULL);
 }
 
 static void handle_input_method_commit(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, input_method_commit);
 	struct wlr_text_input_v3 *text_input = layer->active_text_input;
 	if (text_input == NULL) {
@@ -251,26 +251,26 @@ static void handle_input_method_commit(struct wl_listener *listener, void *data)
 }
 
 static void handle_input_method_grab_keyboard(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, input_method_grab_keyboard);
 	struct wlr_input_method_keyboard_grab_v2 *grab = data;
 	set_grab(layer, grab);
 }
 
 static void handle_router_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, router_destroy);
-	wlr_input_method_v2_input_router_layer_destroy(layer);
+	wlr_input_method_v2_input_filter_layer_destroy(layer);
 }
 
 static void handle_grab_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_input_method_v2_input_router_layer *layer =
+	struct wlr_input_method_v2_input_filter_layer *layer =
 		wl_container_of(listener, layer, grab_destroy);
 	set_grab(layer, NULL);
 }
 
-void wlr_input_method_v2_input_router_layer_set_input_method(
-		struct wlr_input_method_v2_input_router_layer *layer,
+void wlr_input_method_v2_input_filter_layer_set_input_method(
+		struct wlr_input_method_v2_input_filter_layer *layer,
 		struct wlr_input_method_v2 *input_method) {
 	if (layer->input_method == input_method) {
 		return;
@@ -305,8 +305,8 @@ void wlr_input_method_v2_input_router_layer_set_input_method(
 	set_grab(layer, input_method != NULL ? input_method->keyboard_grab : NULL);
 }
 
-void wlr_input_method_v2_input_router_layer_set_active_text_input(
-		struct wlr_input_method_v2_input_router_layer *layer,
+void wlr_input_method_v2_input_filter_layer_set_active_text_input(
+		struct wlr_input_method_v2_input_filter_layer *layer,
 		struct wlr_text_input_v3 *text_input) {
 	if (layer->active_text_input == text_input) {
 		return;
@@ -335,22 +335,22 @@ void wlr_input_method_v2_input_router_layer_set_active_text_input(
 	}
 }
 
-bool wlr_input_method_v2_input_router_layer_register(int32_t priority) {
-	if (!wlr_input_router_keyboard_register_interface(&keyboard_impl, priority)) {
+bool wlr_input_method_v2_input_filter_layer_register(int32_t priority) {
+	if (!wlr_input_filter_keyboard_register_interface(&keyboard_impl, priority)) {
 		return false;
 	}
 	return true;
 }
 
-struct wlr_input_method_v2_input_router_layer *wlr_input_method_v2_input_router_layer_create(
-		struct wlr_input_router *router) {
-	struct wlr_input_method_v2_input_router_layer *layer = calloc(1, sizeof(*layer));
+struct wlr_input_method_v2_input_filter_layer *wlr_input_method_v2_input_filter_layer_create(
+		struct wlr_input_filter *filter) {
+	struct wlr_input_method_v2_input_filter_layer *layer = calloc(1, sizeof(*layer));
 	if (layer == NULL) {
 		wlr_log(WLR_ERROR, "Allocation failed");
 		return NULL;
 	}
 
-	wlr_input_router_keyboard_init(&layer->keyboard,
+	wlr_input_filter_keyboard_init(&layer->keyboard,
 		router, &keyboard_impl);
 
 	layer->active_text_input_destroy.notify = handle_active_text_input_destroy;
@@ -379,8 +379,8 @@ struct wlr_input_method_v2_input_router_layer *wlr_input_method_v2_input_router_
 	return layer;
 }
 
-void wlr_input_method_v2_input_router_layer_destroy(
-		struct wlr_input_method_v2_input_router_layer *layer) {
+void wlr_input_method_v2_input_filter_layer_destroy(
+		struct wlr_input_method_v2_input_filter_layer *layer) {
 	if (layer == NULL) {
 		return;
 	}
@@ -389,11 +389,11 @@ void wlr_input_method_v2_input_router_layer_destroy(
 
 	assert(wl_list_empty(&layer->events.destroy.listener_list));
 
-	wlr_input_router_keyboard_notify_device(&layer->keyboard,
-		&(struct wlr_input_router_keyboard_device_event){
+	wlr_input_filter_keyboard_notify_device(&layer->keyboard,
+		&(struct wlr_input_filter_keyboard_device_event){
 			.device = layer->keyboard.device,
 		});
-	wlr_input_router_keyboard_finish(&layer->keyboard);
+	wlr_input_filter_keyboard_finish(&layer->keyboard);
 
 	wl_list_remove(&layer->active_text_input_destroy.link);
 	wl_list_remove(&layer->active_text_input_commit.link);

@@ -1,17 +1,17 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <wlr/backend/session.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/log.h>
 
-static uint32_t keyboard_key(struct wlr_input_router_keyboard *keyboard,
-		const struct wlr_input_router_keyboard_key_event *event) {
-	struct wlr_session_input_router_layer *layer = wl_container_of(keyboard, layer, keyboard);
+static uint32_t keyboard_key(struct wlr_input_filter_keyboard *keyboard,
+		const struct wlr_input_filter_keyboard_key_event *event) {
+	struct wlr_session_input_filter_layer *layer = wl_container_of(keyboard, layer, keyboard);
 
 	struct xkb_state *xkb_state = layer->keyboard.device->xkb_state;
 
-	struct wlr_input_router_keyboard_key_event copy;
+	struct wlr_input_filter_keyboard_key_event copy;
 	if (xkb_state != NULL) {
 		bool intercepted = false;
 
@@ -34,44 +34,44 @@ static uint32_t keyboard_key(struct wlr_input_router_keyboard *keyboard,
 		}
 	}
 
-	return wlr_input_router_keyboard_notify_key(keyboard, event);
+	return wlr_input_filter_keyboard_notify_key(keyboard, event);
 }
 
-static const struct wlr_input_router_keyboard_interface keyboard_impl = {
+static const struct wlr_input_filter_keyboard_impl keyboard_impl = {
 	.base = {
-		.name = "wlr_session_input_router_layer-keyboard",
+		.name = "wlr_session_input_filter_layer-keyboard",
 	},
 	.key = keyboard_key,
 };
 
 static void handle_router_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_session_input_router_layer *layer =
+	struct wlr_session_input_filter_layer *layer =
 		wl_container_of(listener, layer, router_destroy);
-	wlr_session_input_router_layer_destroy(layer);
+	wlr_session_input_filter_layer_destroy(layer);
 }
 
 static void handle_session_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_session_input_router_layer *layer =
+	struct wlr_session_input_filter_layer *layer =
 		wl_container_of(listener, layer, session_destroy);
-	wlr_session_input_router_layer_destroy(layer);
+	wlr_session_input_filter_layer_destroy(layer);
 }
 
-bool wlr_session_input_router_layer_register(int32_t priority) {
-	if (!wlr_input_router_keyboard_register_interface(&keyboard_impl, priority)) {
+bool wlr_session_input_filter_layer_register(int32_t priority) {
+	if (!wlr_input_filter_keyboard_register_interface(&keyboard_impl, priority)) {
 		return false;
 	}
 	return true;
 }
 
-struct wlr_session_input_router_layer *wlr_session_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_session *session) {
-	struct wlr_session_input_router_layer *layer = calloc(1, sizeof(*layer));
+struct wlr_session_input_filter_layer *wlr_session_input_filter_layer_create(
+		struct wlr_input_filter *filter, struct wlr_session *session) {
+	struct wlr_session_input_filter_layer *layer = calloc(1, sizeof(*layer));
 	if (layer == NULL) {
 		wlr_log(WLR_ERROR, "Allocation failed");
 		return NULL;
 	}
 
-	wlr_input_router_keyboard_init(&layer->keyboard,
+	wlr_input_filter_keyboard_init(&layer->keyboard,
 		router, &keyboard_impl);
 
 	layer->router = router;
@@ -87,7 +87,7 @@ struct wlr_session_input_router_layer *wlr_session_input_router_layer_create(
 	return layer;
 }
 
-void wlr_session_input_router_layer_destroy(struct wlr_session_input_router_layer *layer) {
+void wlr_session_input_filter_layer_destroy(struct wlr_session_input_filter_layer *layer) {
 	if (layer == NULL) {
 		return;
 	}
@@ -96,7 +96,7 @@ void wlr_session_input_router_layer_destroy(struct wlr_session_input_router_laye
 
 	assert(wl_list_empty(&layer->events.destroy.listener_list));
 
-	wlr_input_router_keyboard_finish(&layer->keyboard);
+	wlr_input_filter_keyboard_finish(&layer->keyboard);
 
 	wl_list_remove(&layer->router_destroy.link);
 	wl_list_remove(&layer->session_destroy.link);

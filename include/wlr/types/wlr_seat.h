@@ -12,7 +12,7 @@
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_input_device.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
 
@@ -349,7 +349,7 @@ struct wlr_seat_keyboard_focus_change_event {
 	struct wlr_surface *old_surface, *new_surface;
 };
 
-struct wlr_seat_input_router_layer_touch_point {
+struct wlr_seat_input_filter_layer_touch_point {
 	struct {
 		struct wlr_seat_client *seat_client;
 		struct wl_listener seat_client_destroy;
@@ -361,8 +361,8 @@ struct wlr_seat_input_router_layer_touch_point {
  * A wl_seat input router layer which sends wl_keyboard, wl_pointer, and
  * wl_touch events.
  */
-struct wlr_seat_input_router_layer {
-	struct wlr_input_router *router;
+struct wlr_seat_input_filter_layer {
+	struct wlr_input_filter *filter;
 	struct wlr_seat *seat;
 
 	struct {
@@ -370,12 +370,12 @@ struct wlr_seat_input_router_layer {
 	} events;
 
 	struct {
-		struct wlr_input_router_keyboard keyboard;
-		struct wlr_input_router_pointer pointer;
+		struct wlr_input_filter_keyboard keyboard;
+		struct wlr_input_filter_pointer pointer;
 
-		struct wlr_input_router_touch touch;
-		struct wlr_seat_input_router_layer_touch_point
-			touch_points[WLR_INPUT_ROUTER_MAX_TOUCH_POINTS];
+		struct wlr_input_filter_touch touch;
+		struct wlr_seat_input_filter_layer_touch_point
+			touch_points[WLR_INPUT_FILTER_MAX_TOUCH_POINTS];
 
 		struct wl_listener router_destroy;
 		struct wl_listener seat_destroy;
@@ -800,11 +800,11 @@ struct wlr_seat_client *wlr_seat_client_from_pointer_resource(
  */
 bool wlr_surface_accepts_touch(struct wlr_surface *surface, struct wlr_seat *wlr_seat);
 
-bool wlr_seat_input_router_layer_register(int32_t priority);
+bool wlr_seat_input_filter_layer_register(int32_t priority);
 
-struct wlr_seat_input_router_layer *wlr_seat_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_seat *seat);
-void wlr_seat_input_router_layer_destroy(struct wlr_seat_input_router_layer *layer);
+struct wlr_seat_input_filter_layer *wlr_seat_input_filter_layer_create(
+	struct wlr_input_filter *filter, struct wlr_seat *seat);
+void wlr_seat_input_filter_layer_destroy(struct wlr_seat_input_filter_layer *layer);
 
 
 #endif

@@ -14,7 +14,7 @@
 #include <wayland-protocols/pointer-constraints-unstable-v1-enum.h>
 #include <pixman.h>
 #include <wlr/types/wlr_compositor.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_seat.h>
 
 struct wlr_seat;
@@ -94,8 +94,8 @@ struct wlr_pointer_constraints_v1 {
  * A zwp_pointer_constraints_v1 input router layer which modifiers pointer
  * position based on the constraint of an active surface.
  */
-struct wlr_pointer_constraints_v1_input_router_layer {
-	struct wlr_input_router *router;
+struct wlr_pointer_constraints_v1_input_filter_layer {
+	struct wlr_input_filter *filter;
 	struct wlr_pointer_constraints_v1 *constraints;
 	struct wlr_seat *seat;
 
@@ -110,7 +110,7 @@ struct wlr_pointer_constraints_v1_input_router_layer {
 	} events;
 
 	struct {
-		struct wlr_input_router_pointer pointer;
+		struct wlr_input_filter_pointer pointer;
 
 		struct wlr_surface *active_surface;
 		struct wlr_pointer_constraint_v1 *active;
@@ -132,7 +132,7 @@ struct wlr_pointer_constraints_v1_input_router_layer {
 	} WLR_PRIVATE;
 };
 
-struct wlr_pointer_constraints_v1_input_router_layer_cursor_hint_event {
+struct wlr_pointer_constraints_v1_input_filter_layer_cursor_hint_event {
 	// Global position to warp the pointer to
 	double x, y;
 };
@@ -153,17 +153,17 @@ void wlr_pointer_constraint_v1_send_activated(
 void wlr_pointer_constraint_v1_send_deactivated(
 	struct wlr_pointer_constraint_v1 *constraint);
 
-bool wlr_pointer_constraints_v1_input_router_layer_register(int32_t priority);
+bool wlr_pointer_constraints_v1_input_filter_layer_register(int32_t priority);
 
-struct wlr_pointer_constraints_v1_input_router_layer *
-wlr_pointer_constraints_v1_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_pointer_constraints_v1 *constraints,
-		struct wlr_seat *seat);
-void wlr_pointer_constraints_v1_input_router_layer_destroy(
-		struct wlr_pointer_constraints_v1_input_router_layer *layer);
+struct wlr_pointer_constraints_v1_input_filter_layer *
+wlr_pointer_constraints_v1_input_filter_layer_create(
+	struct wlr_input_filter *filter, struct wlr_pointer_constraints_v1 *constraints,
+	struct wlr_seat *seat);
+void wlr_pointer_constraints_v1_input_filter_layer_destroy(
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer);
 
-void wlr_pointer_constraints_v1_input_router_layer_set_active_surface(
-		struct wlr_pointer_constraints_v1_input_router_layer *layer,
-		struct wlr_surface *surface);
+void wlr_pointer_constraints_v1_input_filter_layer_set_active_surface(
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer,
+	struct wlr_surface *surface);
 
 #endif

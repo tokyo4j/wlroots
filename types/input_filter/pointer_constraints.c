@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
 
@@ -30,14 +30,14 @@ static void closest_point(pixman_region32_t *region, double x, double y,
 	}
 }
 
-static uint32_t update_position(struct wlr_pointer_constraints_v1_input_router_layer *layer,
-		const struct wlr_input_router_pointer_position_event *event) {
+static uint32_t update_position(struct wlr_pointer_constraints_v1_input_filter_layer *layer,
+		const struct wlr_input_filter_pointer_position_event *event) {
 	struct wlr_pointer_constraint_v1 *constraint = layer->active;
 
-	struct wlr_input_router_pointer_position_event copy;
+	struct wlr_input_filter_pointer_position_event copy;
 	if (constraint != NULL) {
 		double surface_x, surface_y;
-		if (!wlr_input_router_get_surface_position(layer->router, constraint->surface,
+		if (!wlr_input_filter_get_surface_position(layer->router, constraint->surface,
 				&surface_x, &surface_y)) {
 			goto out;
 		}
@@ -69,26 +69,26 @@ static uint32_t update_position(struct wlr_pointer_constraints_v1_input_router_l
 out:
 	layer->last_x = event->x;
 	layer->last_y = event->y;
-	return wlr_input_router_pointer_notify_position(&layer->pointer, event);
+	return wlr_input_filter_pointer_notify_position(&layer->pointer, event);
 }
 
-static uint32_t pointer_position(struct wlr_input_router_pointer *pointer,
-		const struct wlr_input_router_pointer_position_event *event) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+static uint32_t pointer_position(struct wlr_input_filter_pointer *pointer,
+		const struct wlr_input_filter_pointer_position_event *event) {
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(pointer, layer, pointer);
 	return update_position(layer, event);
 }
 
-static const struct wlr_input_router_pointer_interface pointer_impl = {
+static const struct wlr_input_filter_pointer_impl pointer_impl = {
 	.base = {
-		.name = "wlr_pointer_constraints_v1_input_router_layer-pointer",
+		.name = "wlr_pointer_constraints_v1_input_filter_layer-pointer",
 	},
 	.position = pointer_position,
 };
 
-static void refresh_position(struct wlr_pointer_constraints_v1_input_router_layer *layer) {
+static void refresh_position(struct wlr_pointer_constraints_v1_input_filter_layer *layer) {
 	update_position(layer,
-		&(struct wlr_input_router_pointer_position_event){
+		&(struct wlr_input_filter_pointer_position_event){
 			.x = layer->pointer.x,
 			.y = layer->pointer.y,
 			.focus = &layer->pointer.focus,
@@ -96,7 +96,7 @@ static void refresh_position(struct wlr_pointer_constraints_v1_input_router_laye
 		});
 }
 
-static void set_active(struct wlr_pointer_constraints_v1_input_router_layer *layer,
+static void set_active(struct wlr_pointer_constraints_v1_input_filter_layer *layer,
 		struct wlr_pointer_constraint_v1 *constraint) {
 	struct wlr_pointer_constraint_v1 *prev = layer->active;
 	if (constraint == prev) {
@@ -112,9 +112,9 @@ static void set_active(struct wlr_pointer_constraints_v1_input_router_layer *lay
 	if (prev != NULL) {
 		if (prev->type == WLR_POINTER_CONSTRAINT_V1_LOCKED && prev->current.cursor_hint.enabled) {
 			double surface_x, surface_y;
-			if (wlr_input_router_get_surface_position(layer->router, prev->surface,
+			if (wlr_input_filter_get_surface_position(layer->router, prev->surface,
 					&surface_x, &surface_y)) {
-				struct wlr_pointer_constraints_v1_input_router_layer_cursor_hint_event event = {
+				struct wlr_pointer_constraints_v1_input_filter_layer_cursor_hint_event event = {
 					.x = surface_x + prev->current.cursor_hint.x,
 					.y = surface_y + prev->current.cursor_hint.y,
 				};
@@ -139,32 +139,32 @@ static void set_active(struct wlr_pointer_constraints_v1_input_router_layer *lay
 }
 
 static void handle_active_surface_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, active_surface_destroy);
-	wlr_pointer_constraints_v1_input_router_layer_set_active_surface(layer, NULL);
+	wlr_pointer_constraints_v1_input_filter_layer_set_active_surface(layer, NULL);
 }
 
 static void handle_active_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, active_destroy);
 	set_active(layer, NULL);
 }
 
 static void handle_active_set_region(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, active_set_region);
 	layer->lock_applied = false;
 	refresh_position(layer);
 }
 
 static void handle_constraints_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, constraints_destroy);
-	wlr_pointer_constraints_v1_input_router_layer_destroy(layer);
+	wlr_pointer_constraints_v1_input_filter_layer_destroy(layer);
 }
 
 static void handle_constraints_new_constraint(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, constraints_new_constraint);
 	struct wlr_pointer_constraint_v1 *constraint = data;
 	if (layer->active_surface == constraint->surface) {
@@ -173,19 +173,19 @@ static void handle_constraints_new_constraint(struct wl_listener *listener, void
 }
 
 static void handle_router_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, router_destroy);
-	wlr_pointer_constraints_v1_input_router_layer_destroy(layer);
+	wlr_pointer_constraints_v1_input_filter_layer_destroy(layer);
 }
 
 static void handle_seat_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer =
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer =
 		wl_container_of(listener, layer, seat_destroy);
-	wlr_pointer_constraints_v1_input_router_layer_destroy(layer);
+	wlr_pointer_constraints_v1_input_filter_layer_destroy(layer);
 }
 
-void wlr_pointer_constraints_v1_input_router_layer_set_active_surface(
-		struct wlr_pointer_constraints_v1_input_router_layer *layer,
+void wlr_pointer_constraints_v1_input_filter_layer_set_active_surface(
+		struct wlr_pointer_constraints_v1_input_filter_layer *layer,
 		struct wlr_surface *surface) {
 	if (layer->active_surface == surface) {
 		return;
@@ -206,24 +206,24 @@ void wlr_pointer_constraints_v1_input_router_layer_set_active_surface(
 	set_active(layer, constraint);
 }
 
-bool wlr_pointer_constraints_v1_input_router_layer_register(int32_t priority) {
-	if (!wlr_input_router_pointer_register_interface(&pointer_impl, priority)) {
+bool wlr_pointer_constraints_v1_input_filter_layer_register(int32_t priority) {
+	if (!wlr_input_filter_pointer_register_interface(&pointer_impl, priority)) {
 		return false;
 	}
 	return true;
 }
 
-struct wlr_pointer_constraints_v1_input_router_layer *
-wlr_pointer_constraints_v1_input_router_layer_create(
-		struct wlr_input_router *router, struct wlr_pointer_constraints_v1 *constraints,
+struct wlr_pointer_constraints_v1_input_filter_layer *
+wlr_pointer_constraints_v1_input_filter_layer_create(
+		struct wlr_input_filter *filter, struct wlr_pointer_constraints_v1 *constraints,
 		struct wlr_seat *seat) {
-	struct wlr_pointer_constraints_v1_input_router_layer *layer = calloc(1, sizeof(*layer));
+	struct wlr_pointer_constraints_v1_input_filter_layer *layer = calloc(1, sizeof(*layer));
 	if (layer == NULL) {
 		wlr_log(WLR_ERROR, "Allocation failed");
 		return NULL;
 	}
 
-	wlr_input_router_pointer_init(&layer->pointer, router, &pointer_impl);
+	wlr_input_filter_pointer_init(&layer->pointer, router, &pointer_impl);
 
 	layer->active_surface_destroy.notify = handle_active_surface_destroy;
 	wl_list_init(&layer->active_surface_destroy.link);
@@ -255,8 +255,8 @@ wlr_pointer_constraints_v1_input_router_layer_create(
 	return layer;
 }
 
-void wlr_pointer_constraints_v1_input_router_layer_destroy(
-		struct wlr_pointer_constraints_v1_input_router_layer *layer) {
+void wlr_pointer_constraints_v1_input_filter_layer_destroy(
+		struct wlr_pointer_constraints_v1_input_filter_layer *layer) {
 	if (layer == NULL) {
 		return;
 	}
@@ -266,7 +266,7 @@ void wlr_pointer_constraints_v1_input_router_layer_destroy(
 	assert(wl_list_empty(&layer->events.destroy.listener_list));
 	assert(wl_list_empty(&layer->events.cursor_hint.listener_list));
 
-	wlr_input_router_pointer_finish(&layer->pointer);
+	wlr_input_filter_pointer_finish(&layer->pointer);
 
 	wl_list_remove(&layer->active_surface_destroy.link);
 	wl_list_remove(&layer->active_destroy.link);

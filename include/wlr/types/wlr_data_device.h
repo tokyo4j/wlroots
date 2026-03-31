@@ -10,7 +10,7 @@
 #define WLR_TYPES_WLR_DATA_DEVICE_H
 
 #include <wayland-server-core.h>
-#include <wlr/types/wlr_input_router.h>
+#include <wlr/types/wlr_input_filter.h>
 #include <wlr/types/wlr_seat.h>
 
 struct wlr_data_device_manager {
@@ -152,9 +152,9 @@ struct wlr_drag_drop_event {
 	uint32_t time;
 };
 
-enum wlr_drag_input_router_layer_type {
-	WLR_DRAG_INPUT_ROUTER_LAYER_POINTER,
-	WLR_DRAG_INPUT_ROUTER_LAYER_TOUCH,
+enum wlr_drag_input_filter_layer_type {
+	WLR_DRAG_INPUT_FILTER_LAYER_POINTER,
+	WLR_DRAG_INPUT_FILTER_LAYER_TOUCH,
 };
 
 /**
@@ -162,12 +162,12 @@ enum wlr_drag_input_router_layer_type {
  * on the pointer or a touch point position and focus. It is automatically
  * destroyed when the originating action (e.g. a button press) is reverted.
  */
-struct wlr_drag_input_router_layer {
-	struct wlr_input_router *router;
-	struct wlr_input_router_implicit_grab *implicit_grab;
+struct wlr_drag_input_filter_layer {
+	struct wlr_input_filter_manager *filter_manager;
+	struct wlr_input_filter_implicit_grab *implicit_grab;
 	struct wlr_drag *drag;
 
-	enum wlr_drag_input_router_layer_type type;
+	enum wlr_drag_input_filter_layer_type type;
 
 	struct {
 		// Global position, hotspot is not included
@@ -182,16 +182,16 @@ struct wlr_drag_input_router_layer {
 	struct {
 		union {
 			struct {
-				struct wlr_input_router_pointer pointer;
+				struct wlr_input_filter_pointer pointer;
 				uint32_t pointer_button;
 			};
 			struct {
-				struct wlr_input_router_touch touch;
+				struct wlr_input_filter_touch touch;
 				int32_t touch_id;
 			};
 		};
 
-		struct wl_listener router_destroy;
+		struct wl_listener filter_manager_destroy;
 		struct wl_listener drag_destroy;
 	} WLR_PRIVATE;
 };
@@ -320,14 +320,12 @@ void wlr_data_source_dnd_finish(struct wlr_data_source *source);
 void wlr_data_source_dnd_action(struct wlr_data_source *source,
 	enum wl_data_device_manager_dnd_action action);
 
-bool wlr_drag_input_router_layer_register(int32_t priority);
+struct wlr_drag_input_filter_layer *wlr_drag_input_filter_layer_create_pointer(
+		struct wlr_input_filter *filter, struct wlr_drag *drag, uint32_t button);
 
-struct wlr_drag_input_router_layer *wlr_drag_input_router_layer_create_pointer(
-		struct wlr_input_router *router, struct wlr_drag *drag, uint32_t button);
+struct wlr_drag_input_filter_layer *wlr_drag_input_filter_layer_create_touch(
+		struct wlr_input_filter *filter, struct wlr_drag *drag, int32_t id);
 
-struct wlr_drag_input_router_layer *wlr_drag_input_router_layer_create_touch(
-		struct wlr_input_router *router, struct wlr_drag *drag, int32_t id);
-
-void wlr_drag_input_router_layer_destroy(struct wlr_drag_input_router_layer *layer);
+void wlr_drag_input_filter_layer_destroy(struct wlr_drag_input_filter_layer *layer);
 
 #endif
